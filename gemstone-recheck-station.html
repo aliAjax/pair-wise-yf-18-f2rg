@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宝石分拣复称台</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1f2840; --line:#2b3a5e;
+    --txt:#e6ecf7; --mut:#8b98b8; --acc:#4da3ff; --ok:#35c08a;
+    --warn:#f0a63c; --bad:#ef5b6e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.55 "PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  header{padding:14px 22px;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0}
+  header .sub{color:var(--mut);font-size:12px}
+  header .sp{flex:1}
+  nav{display:flex;gap:6px;padding:10px 22px 0;background:var(--panel);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  nav button{background:none;border:none;color:var(--mut);padding:9px 14px;
+    cursor:pointer;font-size:14px;border-bottom:2px solid transparent}
+  nav button.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+  main{padding:20px 22px;max-width:1280px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin-bottom:18px}
+  .card h2{margin:0 0 12px;font-size:15px;color:var(--acc)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+  input,select{width:100%;padding:7px 8px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;color:var(--txt);font-size:13px}
+  input:focus,select:focus{outline:none;border-color:var(--acc)}
+  .btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;
+    background:var(--acc);color:#fff}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.ok{background:var(--ok)} .btn.warn{background:var(--warn);color:#221}
+  .btn.bad{background:var(--bad)} .btn.sm{padding:4px 10px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--mut);font-weight:500;font-size:12px}
+  .tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px}
+  .t-ok{background:rgba(53,192,138,.15);color:var(--ok)}
+  .t-warn{background:rgba(240,166,60,.15);color:var(--warn)}
+  .t-bad{background:rgba(239,91,110,.15);color:var(--bad)}
+  .t-mut{background:rgba(139,152,184,.15);color:var(--mut)}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .stat{flex:1;min-width:140px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 16px}
+  .stat b{font-size:22px;display:block}
+  .stat span{color:var(--mut);font-size:12px}
+  .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:10px 22px;
+    border-radius:8px;z-index:99;font-size:14px;display:none;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+  .toast.ok{background:var(--ok);color:#fff}
+  .toast.err{background:var(--bad);color:#fff}
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .row>div{min-width:110px}
+  .hint{color:var(--mut);font-size:12px;margin-top:8px}
+  .scroll{overflow-x:auto}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  .batchhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .batchhead h3{margin:0;font-size:15px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:10px}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:18px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💎 宝石分拣复称台</h1>
+  <span class="sub">纯前端 · 数据仅保存在本浏览器 localStorage</span>
+  <span class="sp"></span>
+  <button class="btn ghost sm" onclick="exportData()">导出备份</button>
+  <button class="btn ghost sm" onclick="document.getElementById('impFile').click()">导入</button>
+  <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this)">
+  <button class="btn bad sm" onclick="clearAll()">清空数据</button>
+</header>
+
+<nav id="nav">
+  <button data-tab="reg" class="on">登记入库</button>
+  <button data-tab="reweigh">复称录入</button>
+  <button data-tab="review">待复核 <span id="reviewBadge"></span></button>
+  <button data-tab="filter">尺寸筛选</button>
+  <button data-tab="diagram">镶嵌示意图</button>
+  <button data-tab="orders">订单清单 / 批次提交</button>
+</nav>
+
+<main>
+  <div class="stats" id="stats"></div>
+
+  <!-- 登记 -->
+  <section id="tab-reg">
+    <div class="card">
+      <h2>登记宝石档案</h2>
+      <div class="grid">
+        <div><label>编号 *</label><input id="f-id" placeholder="如 G-0007"></div>
+        <div><label>品类</label><select id="f-cat">
+          <option>钻石</option><option>红宝石</option><option>蓝宝石</option>
+          <option>祖母绿</option><option>翡翠</option><option>其他</option></select></div>
+        <div><label>轮廓</label><select id="f-shape">
+          <option>圆形</option><option>椭圆</option><option>梨形</option><option>公主方</option>
+          <option>祖母绿切</option><option>马眼</option><option>心形</option><option>垫形</option></select></div>
+        <div><label>档案克重 (ct) *</label><input id="f-wt" type="number" step="0.001" min="0" placeholder="0.000"></div>
+        <div><label>长 (mm)</label><input id="f-l" type="number" step="0.01" min="0"></div>
+        <div><label>宽 (mm)</label><input id="f-w" type="number" step="0.01" min="0"></div>
+        <div><label>深 (mm)</label><input id="f-d" type="number" step="0.01" min="0"></div>
+        <div><label>净度</label><select id="f-cl">
+          <option>FL</option><option>IF</option><option>VVS1</option><option>VVS2</option>
+          <option selected>VS1</option><option>VS2</option><option>SI1</option><option>SI2</option><option>I1</option></select></div>
+        <div><label>颜色</label><select id="f-co">
+          <option>D</option><option>E</option><option selected>F</option><option>G</option><option>H</option>
+          <option>I</option><option>J</option><option>K</option><option>彩宝</option></select></div>
+        <div><label>切工</label><select id="f-cu">
+          <option>EX</option><option>VG</option><option>G</option><option>F</option><option>P</option></select></div>
+        <div><label>拟镶嵌位</label><select id="f-pos"></select></div>
+        <div><label>批次 *</label><input id="f-batch" list="batchList" placeholder="如 ORD-2026-001"><datalist id="batchList"></datalist></div>
+      </div>
+      <div style="margin-top:14px"><button class="btn" onclick="registerStone()">登记入库</button></div>
+      <div class="hint">* 编号唯一；若拟镶嵌位已被在检宝石占用，将登记失败。待复核宝石不占用镶嵌位。</div>
+    </div>
+    <div class="card">
+      <h2>库存档案</h2>
+      <div class="scroll"><table id="invTable"></table></div>
+    </div>
+  </section>
+
+  <!-- 复称 -->
+  <section id="tab-reweigh" style="display:none">
+    <div class="card">
+      <h2>单颗复称录入</h2>
+      <div class="hint" style="margin:0 0 10px">复称值与档案克重相差 &gt; 0.005 ct 时，该颗自动进入 <b style="color:var(--warn)">待复核</b>，并立即释放其镶嵌位；≤ 0.005 ct 视为通过，档案克重更新为复称值。已提交批次内的宝石不可复称。</div>
+      <div class="scroll"><table id="rwTable"></table></div>
+    </div>
+  </section>
+
+  <!-- 复核 -->
+  <section id="tab-review" style="display:none">
+    <div class="card">
+      <h2>待复核处理</h2>
+      <div class="hint" style="margin:0 0 10px">复核放行后，尺寸筛选、镶嵌示意图与订单清单将同步更新。维持档案值或采用复称值均视为放行，宝石重新占用其拟镶嵌位。</div>
+      <div class="scroll"><table id="rvTable"></table></div>
+    </div>
+  </section>
+
+  <!-- 尺寸筛选 -->
+  <section id="tab-filter" style="display:none">
+    <div class="card">
+      <h2>尺寸筛选</h2>
+      <div class="row">
+        <div><label>长 min</label><input id="s-lmin" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>长 max</label><input id="s-lmax" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>宽 min</label><input id="s-wmin" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>宽 max</label><input id="s-wmax" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>深 min</label><input id="s-dmin" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>深 max</label><input id="s-dmax" type="number" step="0.01" oninput="renderFilter()"></div>
+        <div><label>轮廓</label><select id="s-shape" onchange="renderFilter()"><option value="">全部</option></select></div>
+        <div><label>批次</label><select id="s-batch" onchange="renderFilter()"><option value="">全部</option></select></div>
+        <div><label>&nbsp;</label><button class="btn ghost" onclick="resetFilter()">重置</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>筛选结果 <span id="fltCount" class="sub"></span></h2>
+      <div class="scroll"><table id="fltTable"></table></div>
+    </div>
+  </section>
+
+  <!-- 镶嵌示意图 -->
+  <section id="tab-diagram" style="display:none">
+    <div class="card">
+      <h2>镶嵌示意图</h2>
+      <svg id="diagram" viewBox="0 0 460 340" style="width:100%;max-width:640px;display:block;margin:0 auto"></svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#35c08a"></span>已占用</span>
+        <span><span class="dot" style="background:#3a4a6e"></span>空位</span>
+        <span><span class="dot" style="background:#f0a63c"></span>待复核（不占位，虚线）</span>
+        <span><span class="dot" style="background:#ef5b6e"></span>冲突（多颗占位）</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 订单清单 -->
+  <section id="tab-orders" style="display:none">
+    <div class="card">
+      <h2>批次订单总重上限设置</h2>
+      <div class="row">
+        <div><label>批次</label><select id="o-batch"></select></div>
+        <div><label>订单总重上限 (ct)</label><input id="o-limit" type="number" step="0.001" min="0"></div>
+        <div><label>&nbsp;</label><button class="btn" onclick="saveLimit()">保存上限</button></div>
+      </div>
+    </div>
+    <div id="orderList"></div>
+  </section>
+</main>
+
+<footer>数据只存浏览器本地（localStorage），不上传任何服务器 · 复核拒绝时原记录保持不变</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const KEY = "gemRecheck.v1";
+const TOL = 0.005; // 复称容差 (ct)
+const SLOTS = ["主石","副石-1","副石-2","副石-3","副石-4",
+  "配石-1","配石-2","配石-3","配石-4","配石-5","配石-6","配石-7","配石-8"];
+const SHAPES = ["圆形","椭圆","梨形","公主方","祖母绿切","马眼","心形","垫形"];
+
+/* ---------- 状态 ---------- */
+let state = load();
+save(); // 首次打开时把种子数据落盘
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return seed();
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function seed(){
+  const s = {
+    stones: [
+      {id:"G-0001",cat:"钻石",shape:"圆形",weight:0.512,l:5.10,w:5.12,d:3.18,cl:"VS1",co:"F",cu:"EX",pos:"主石",batch:"ORD-2026-001",status:"在检",reweigh:null},
+      {id:"G-0002",cat:"钻石",shape:"圆形",weight:0.108,l:3.02,w:3.00,d:1.86,cl:"VS2",co:"G",cu:"VG",pos:"副石-1",batch:"ORD-2026-001",status:"在检",reweigh:null},
+      {id:"G-0003",cat:"钻石",shape:"圆形",weight:0.105,l:2.98,w:3.01,d:1.83,cl:"VS2",co:"G",cu:"VG",pos:"副石-2",batch:"ORD-2026-001",status:"在检",reweigh:null},
+      {id:"G-0004",cat:"蓝宝石",shape:"椭圆",weight:0.860,l:6.20,w:4.55,d:3.40,cl:"VS1",co:"彩宝",cu:"G",pos:"配石-1",batch:"ORD-2026-001",status:"待复核",reweigh:0.872},
+      {id:"G-0005",cat:"钻石",shape:"圆形",weight:0.032,l:1.95,w:1.96,d:1.21,cl:"SI1",co:"H",cu:"G",pos:"配石-2",batch:"ORD-2026-002",status:"在检",reweigh:null},
+      {id:"G-0006",cat:"红宝石",shape:"梨形",weight:0.640,l:6.50,w:4.20,d:3.05,cl:"VS2",co:"彩宝",cu:"VG",pos:"主石",batch:"ORD-2026-002",status:"在检",reweigh:null}
+    ],
+    limits: { "ORD-2026-001": 3.000, "ORD-2026-002": 1.500 },
+    submitted: {}
+  };
+  return s;
+}
+
+/* ---------- 工具 ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => (Math.round(n*1000)/1000).toFixed(3);
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg, ok=true){
+  const t = $("toast");
+  t.textContent = msg; t.className = "toast " + (ok?"ok":"err"); t.style.display="block";
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.style.display="none", 3200);
+}
+function batches(){ return [...new Set(state.stones.map(s=>s.batch))]; }
+function batchStatus(b){
+  if(state.submitted[b]) return "已提交";
+  const st = state.stones.filter(s=>s.batch===b);
+  return st.some(s=>s.status==="待复核") ? "待复核" : "在检";
+}
+function effWeight(s){ return s.weight; } // 放行/通过时 weight 已同步
+function batchTotal(b){
+  return state.stones.filter(s=>s.batch===b).reduce((a,s)=>a+effWeight(s),0);
+}
+// 占用镶嵌位：待复核不占位
+function occupant(pos, batch){
+  return state.stones.filter(s=>s.pos===pos && s.batch===batch && s.status!=="待复核");
+}
+function statusTag(s){
+  if(s.status==="待复核") return '<span class="tag t-warn">待复核</span>';
+  if(s.status==="已提交") return '<span class="tag t-mut">已提交</span>';
+  return '<span class="tag t-ok">在检</span>';
+}
+
+/* ---------- 页签 ---------- */
+document.querySelectorAll("#nav button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.querySelectorAll("main > section").forEach(sec=>sec.style.display="none");
+    $("tab-"+b.dataset.tab).style.display="block";
+    renderAll();
+  };
+});
+
+/* ---------- 登记 ---------- */
+function registerStone(){
+  const id = $("f-id").value.trim();
+  const wt = parseFloat($("f-wt").value);
+  const batch = $("f-batch").value.trim();
+  const pos = $("f-pos").value;
+  if(!id) return toast("请填写编号", false);
+  if(state.stones.some(s=>s.id===id)) return toast("编号已存在：" + id, false);
+  if(!(wt>0)) return toast("请填写有效克重", false);
+  if(!batch) return toast("请填写批次", false);
+  if(state.submitted[batch]) return toast("批次 " + batch + " 已提交，不可再登记", false);
+  if(occupant(pos, batch).length) return toast("镶嵌位 " + pos + " 在该批次已被占用", false);
+  state.stones.push({
+    id, cat:$("f-cat").value, shape:$("f-shape").value, weight:Math.round(wt*1000)/1000,
+    l:+$("f-l").value||0, w:+$("f-w").value||0, d:+$("f-d").value||0,
+    cl:$("f-cl").value, co:$("f-co").value, cu:$("f-cu").value,
+    pos, batch, status:"在检", reweigh:null
+  });
+  save(); renderAll();
+  $("f-id").value=""; $("f-wt").value="";
+  toast("已登记 " + id);
+}
+
+/* ---------- 复称 ---------- */
+function doReweigh(id){
+  const inp = $("rw-"+CSS.escape(id));
+  const v = parseFloat(inp.value);
+  if(!(v>=0)) return toast("请输入有效复称值", false);
+  const s = state.stones.find(x=>x.id===id);
+  if(!s || s.status==="已提交") return;
+  const rv = Math.round(v*1000)/1000;
+  const diff = Math.abs(rv - s.weight);
+  if(diff > TOL + 1e-9){
+    s.reweigh = rv; s.status = "待复核";
+    toast(id + " 差值 " + fmt(diff) + " ct 超差，进入待复核，镶嵌位已释放", false);
+  }else{
+    s.weight = rv; s.reweigh = null;
+    toast(id + " 复称通过（差值 " + fmt(diff) + " ct），档案克重已更新");
+  }
+  save(); renderAll();
+}
+
+/* ---------- 复核 ---------- */
+function review(id, useReweigh){
+  const s = state.stones.find(x=>x.id===id);
+  if(!s || s.status!=="待复核") return;
+  if(occupant(s.pos, s.batch).length)
+    return toast("镶嵌位 " + s.pos + " 已被占用，请先调整该批次其他宝石", false);
+  if(useReweigh) s.weight = s.reweigh;
+  s.reweigh = null; s.status = "在检";
+  save(); renderAll();
+  toast(id + (useReweigh ? " 已放行，采用复称值 " + fmt(s.weight) + " ct" : " 已放行，维持档案值 " + fmt(s.weight) + " ct"));
+}
+
+/* ---------- 批次提交 ---------- */
+function submitBatch(b){
+  if(state.submitted[b]) return;
+  const stones = state.stones.filter(s=>s.batch===b);
+  const pend = stones.filter(s=>s.status==="待复核");
+  if(pend.length)
+    return toast("批次拒绝：" + pend.map(s=>s.id).join("、") + " 存在未复核差值，原记录不变", false);
+  const total = batchTotal(b);
+  const limit = state.limits[b];
+  if(limit!=null && total > limit + 1e-9)
+    return toast("批次拒绝：订单总重 " + fmt(total) + " ct 超过上限 " + fmt(limit) + " ct，原记录不变", false);
+  stones.forEach(s=>s.status="已提交");
+  state.submitted[b] = true;
+  save(); renderAll();
+  toast("批次 " + b + " 提交成功，共 " + stones.length + " 颗，总重 " + fmt(total) + " ct");
+}
+function saveLimit(){
+  const b = $("o-batch").value;
+  const v = parseFloat($("o-limit").value);
+  if(!b || !(v>=0)) return toast("请选择批次并填写有效上限", false);
+  state.limits[b] = Math.round(v*1000)/1000;
+  save(); renderAll(); toast("已保存 " + b + " 上限 " + fmt(state.limits[b]) + " ct");
+}
+
+/* ---------- 渲染 ---------- */
+function renderAll(){
+  renderStats(); renderInv(); renderReweigh(); renderReview();
+  renderFilter(); renderDiagram(); renderOrders(); fillSelects();
+}
+function renderStats(){
+  const all = state.stones;
+  const pend = all.filter(s=>s.status==="待复核").length;
+  $("stats").innerHTML =
+    stat(all.length,"在库宝石") + stat(pend,"待复核", pend?"var(--warn)":"var(--ok)") +
+    stat(batches().length,"批次") +
+    stat(fmt(all.reduce((a,s)=>a+s.weight,0))+" ct","档案总重");
+  $("reviewBadge").textContent = pend ? "("+pend+")" : "";
+}
+function stat(v,l,c){ return `<div class="stat"><b style="color:${c||"var(--txt)"}">${v}</b><span>${l}</span></div>`; }
+
+function stoneRow(s, extra){
+  return `<tr><td class="mono">${esc(s.id)}</td><td>${esc(s.cat)}</td><td>${esc(s.shape)}</td>
+    <td class="mono">${fmt(s.weight)}</td>
+    <td class="mono">${s.l}×${s.w}×${s.d}</td>
+    <td>${esc(s.cl)}</td><td>${esc(s.co)}</td><td>${esc(s.cu)}</td>
+    <td>${esc(s.pos)}</td><td>${esc(s.batch)}</td><td>${statusTag(s)}</td>${extra||""}</tr>`;
+}
+const HEAD = "<tr><th>编号</th><th>品类</th><th>轮廓</th><th>克重(ct)</th><th>尺寸 长×宽×深</th><th>净度</th><th>颜色</th><th>切工</th><th>拟镶嵌位</th><th>批次</th><th>状态</th>";
+
+function renderInv(){
+  $("invTable").innerHTML = HEAD + "<th>操作</th></tr>" +
+    (state.stones.map(s=>stoneRow(s,
+      `<td>${s.status==="已提交"?"":`<button class="btn bad sm" onclick="delStone('${esc(s.id)}')">删除</button>`}</td>`
+    )).join("") || `<tr><td colspan="12" style="color:var(--mut)">暂无记录</td></tr>`);
+}
+function delStone(id){
+  if(!confirm("确认删除 " + id + "？")) return;
+  state.stones = state.stones.filter(s=>s.id!==id);
+  save(); renderAll(); toast("已删除 " + id);
+}
+
+function renderReweigh(){
+  const rows = state.stones.filter(s=>s.status!=="已提交");
+  $("rwTable").innerHTML = HEAD + "<th>复称值(ct)</th><th>操作</th></tr>" +
+    (rows.map(s=>stoneRow(s,
+      `<td><input id="rw-${esc(s.id)}" type="number" step="0.001" min="0" style="width:100px" placeholder="${fmt(s.weight)}"></td>
+       <td><button class="btn sm" onclick="doReweigh('${esc(s.id)}')">提交复称</button></td>`
+    )).join("") || `<tr><td colspan="13" style="color:var(--mut)">无可复称宝石</td></tr>`);
+}
+
+function renderReview(){
+  const rows = state.stones.filter(s=>s.status==="待复核");
+  $("rvTable").innerHTML =
+    "<tr><th>编号</th><th>批次</th><th>拟镶嵌位</th><th>档案克重(ct)</th><th>复称值(ct)</th><th>差值(ct)</th><th>复核操作</th></tr>" +
+    (rows.map(s=>{
+      const diff = s.reweigh - s.weight;
+      return `<tr><td class="mono">${esc(s.id)}</td><td>${esc(s.batch)}</td><td>${esc(s.pos)}</td>
+        <td class="mono">${fmt(s.weight)}</td><td class="mono">${fmt(s.reweigh)}</td>
+        <td class="mono" style="color:var(--warn)">${diff>0?"+":""}${fmt(diff)}</td>
+        <td><button class="btn ok sm" onclick="review('${esc(s.id)}',true)">放行·采用复称值</button>
+        <button class="btn warn sm" onclick="review('${esc(s.id)}',false)">放行·维持档案值</button></td></tr>`;
+    }).join("") || `<tr><td colspan="7" style="color:var(--mut)">暂无待复核宝石 🎉</td></tr>`);
+}
+
+function renderFilter(){
+  const num = id => { const v = parseFloat($(id).value); return isNaN(v)?null:v; };
+  const sh = $("s-shape").value, bt = $("s-batch").value;
+  const rows = state.stones.filter(s=>{
+    if(sh && s.shape!==sh) return false;
+    if(bt && s.batch!==bt) return false;
+    const chk = (v,mn,mx)=> (mn==null||v>=mn)&&(mx==null||v<=mx);
+    return chk(s.l,num("s-lmin"),num("s-lmax")) && chk(s.w,num("s-wmin"),num("s-wmax")) && chk(s.d,num("s-dmin"),num("s-dmax"));
+  });
+  $("fltCount").textContent = "（" + rows.length + " 颗）";
+  $("fltTable").innerHTML = HEAD + "</tr>" +
+    (rows.map(s=>stoneRow(s)).join("") || `<tr><td colspan="11" style="color:var(--mut)">无匹配宝石</td></tr>`);
+}
+function resetFilter(){
+  ["s-lmin","s-lmax","s-wmin","s-wmax","s-dmin","s-dmax"].forEach(i=>$(i).value="");
+  $("s-shape").value=""; $("s-batch").value=""; renderFilter();
+}
+
+/* 镶嵌示意图：主石居中，副石四方，配石八围 */
+function renderDiagram(){
+  const geo = { "主石":[230,170,46,34],
+    "副石-1":[230,62,22,16],"副石-2":[230,278,22,16],"副石-3":[92,170,22,16],"副石-4":[368,170,22,16] };
+  for(let i=1;i<=8;i++){
+    const a = (i-1)*Math.PI/4 - Math.PI/2;
+    geo["配石-"+i] = [230+150*Math.cos(a), 170+112*Math.sin(a), 13, 10];
+  }
+  let svg = `<ellipse cx="230" cy="170" rx="200" ry="150" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="5 5"/>`;
+  for(const pos of SLOTS){
+    const [cx,cy,rx,ry] = geo[pos];
+    const act = state.stones.filter(s=>s.pos===pos && s.status!=="待复核");
+    const pnd = state.stones.filter(s=>s.pos===pos && s.status==="待复核");
+    let fill = "#3a4a6e", dash = "", label = pos, sub = "";
+    if(act.length>1){ fill="var(--bad)"; sub="冲突:"+act.map(s=>s.id).join("/"); }
+    else if(act.length===1){ fill="var(--ok)"; sub=act[0].id+" · "+fmt(act[0].weight)+"ct"; }
+    else if(pnd.length){ fill="none"; dash='stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"'; sub=pnd[0].id+" 待复核"; }
+    svg += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" ${dash||'stroke="var(--line)" stroke-width="1.5"'}/>
+      <text x="${cx}" y="${cy-ry-6}" text-anchor="middle" font-size="11" fill="var(--mut)">${pos}</text>
+      ${sub?`<text x="${cx}" y="${cy+ry+15}" text-anchor="middle" font-size="10" fill="${fill==="var(--bad)"?"var(--bad)":fill==="none"?"var(--warn)":"var(--ok)"}">${esc(sub)}</text>`:""}`;
+  }
+  $("diagram").innerHTML = svg;
+}
+
+function renderOrders(){
+  const bs = batches();
+  $("orderList").innerHTML = bs.map(b=>{
+    const stones = state.stones.filter(s=>s.batch===b);
+    const total = batchTotal(b), limit = state.limits[b];
+    const st = batchStatus(b);
+    const over = limit!=null && total > limit + 1e-9;
+    const tag = st==="已提交" ? '<span class="tag t-mut">已提交</span>'
+      : st==="待复核" ? '<span class="tag t-warn">待复核</span>' : '<span class="tag t-ok">在检</span>';
+    return `<div class="card">
+      <div class="batchhead"><h3>📦 ${esc(b)}</h3>${tag}
+        <span class="hint" style="margin:0">共 ${stones.length} 颗 · 订单总重
+          <b class="mono" style="color:${over?"var(--bad)":"var(--ok)"}">${fmt(total)} ct</b>
+          / 上限 ${limit!=null?fmt(limit)+" ct":"未设置"}</span>
+        <span class="sp" style="flex:1"></span>
+        ${st==="已提交" ? "" : `<button class="btn sm" onclick="submitBatch('${esc(b)}')">提交批次</button>`}
+      </div>
+      <div class="scroll"><table>${HEAD}</tr>${stones.map(s=>stoneRow(s)).join("")}</table></div>
+    </div>`;
+  }).join("") || `<div class="card" style="color:var(--mut)">暂无批次</div>`;
+}
+
+function fillSelects(){
+  $("f-pos").innerHTML = SLOTS.map(p=>`<option>${p}</option>`).join("");
+  $("batchList").innerHTML = batches().map(b=>`<option value="${esc(b)}">`).join("");
+  const cur = $("o-batch").value;
+  $("o-batch").innerHTML = batches().map(b=>`<option>${esc(b)}</option>`).join("");
+  if(batches().includes(cur)) $("o-batch").value = cur;
+  $("o-limit").value = state.limits[$("o-batch").value] ?? "";
+  $("o-batch").onchange = ()=>{ $("o-limit").value = state.limits[$("o-batch").value] ?? ""; };
+  const keep = $("s-shape").value;
+  $("s-shape").innerHTML = '<option value="">全部</option>' + SHAPES.map(s=>`<option>${s}</option>`).join("");
+  $("s-shape").value = keep;
+  const kb = $("s-batch").value;
+  $("s-batch").innerHTML = '<option value="">全部</option>' + batches().map(b=>`<option>${esc(b)}</option>`).join("");
+  $("s-batch").value = kb;
+}
+
+/* ---------- 备份 ---------- */
+function exportData(){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));
+  a.download = "gemstone-backup.json"; a.click();
+}
+function importData(inp){
+  const f = inp.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{
+    const d = JSON.parse(r.result);
+    if(!Array.isArray(d.stones)) throw 0;
+    state = d; save(); renderAll(); toast("导入成功");
+  }catch(e){ toast("导入失败：文件格式不正确", false); } };
+  r.readAsText(f); inp.value="";
+}
+function clearAll(){
+  if(!confirm("确认清空全部本地数据？此操作不可恢复。")) return;
+  localStorage.removeItem(KEY); state = seed(); renderAll(); toast("已清空并载入示例数据");
+}
+
+renderAll();
+</script>
+</body>
+</html>
